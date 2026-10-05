@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Preliminary beam depth, and slab thickness from IS 456 load and computed deflection, with ACI and span-rule comparisons.">
+<meta name="theme-color" content="#e3ebf7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#05070f" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Depth Finder">
+<title>Beam Depth Finder</title>
+<style>
+[hidden]{display:none!important}
+:root{
+  color-scheme: light;
+  --label:#000;
+  --label-2:rgba(60,60,67,.64);
+  --label-3:rgba(60,60,67,.38);
+  --fill:rgba(118,118,128,.14);
+  --sep:rgba(60,60,67,.16);
+  --tint:#007aff;
+  --orange:#c35a00;
+  --orange-ui:#ff9500;
+  --tint-wash:rgba(0,122,255,.12);
+  --orange-wash:rgba(255,149,0,.16);
+  --grey-wash:rgba(118,118,128,.16);
+  --wall:#e3ebf7;
+  --blob-1:#8fbcff; --blob-2:#ffd2a8; --blob-3:#c7b8ff; --blob-4:#93e3da;
+  --glass-top:rgba(255,255,255,.42);
+  --glass-bot:rgba(255,255,255,.20);
+  --bar-top:rgba(255,255,255,.62);
+  --bar-bot:rgba(255,255,255,.44);
+  --rim-hi:rgba(255,255,255,.95);
+  --rim-lo:rgba(255,255,255,.35);
+  --glass-shadow:0 10px 30px -10px rgba(30,50,90,.28), 0 1px 2px rgba(30,50,90,.06);
+  --pill:#fff;
+  --pill-shadow:0 3px 8px rgba(0,0,0,.12), 0 1px 1px rgba(0,0,0,.04);
+  --thumb-shadow:0 2px 6px rgba(0,0,0,.18), 0 0 0 .5px rgba(0,0,0,.04);
+  --slab-fill:rgba(0,122,255,.10);
+  --sf:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue",system-ui,"Segoe UI",Roboto,sans-serif;
+  --sf-round:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,system-ui,"Segoe UI",Roboto,sans-serif;
+  --r-card:26px; --r-inner:16px;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    color-scheme: dark;
+    --label:#fff;
+    --label-2:rgba(235,235,245,.64);
+    --label-3:rgba(235,235,245,.36);
+    --fill:rgba(118,118,128,.28);
+    --sep:rgba(84,84,88,.55);
+    --tint:#0a84ff;
+    --orange:#ff9f0a; --orange-ui:#ff9f0a;
+    --tint-wash:rgba(10,132,255,.20);
+    --orange-wash:rgba(255,159,10,.18);
+    --grey-wash:rgba(118,118,128,.30);
+    --wall:#05070f;
+    --blob-1:#1546b8; --blob-2:#8a3f10; --blob-3:#4b2aa8; --blob-4:#0b6e78;
+    --glass-top:rgba(255,255,255,.13);
+    --glass-bot:rgba(255,255,255,.05);
+    --bar-top:rgba(28,30,40,.62);
+    --bar-bot:rgba(28,30,40,.48);
+    --rim-hi:rgba(255,255,255,.42);
+    --rim-lo:rgba(255,255,255,.08);
+    --glass-shadow:0 12px 34px -10px rgba(0,0,0,.6), 0 1px 2px rgba(0,0,0,.3);
+    --pill:rgba(255,255,255,.22);
+    --pill-shadow:0 3px 8px rgba(0,0,0,.35);
+    --thumb-shadow:0 2px 6px rgba(0,0,0,.5);
+    --slab-fill:rgba(10,132,255,.16);
+  }
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--wall); color:var(--label);
+  font-family:var(--sf); font-size:17px; line-height:1.29; letter-spacing:-.41px;
+  -webkit-font-smoothing:antialiased; -webkit-text-size-adjust:100%;
+  overflow-x:hidden;
+}
+
+.wall{position:fixed; inset:-25%; z-index:-1; pointer-events:none; filter:blur(70px) saturate(115%); opacity:.85}
+.wall i{position:absolute; border-radius:50%; display:block}
+.wall i:nth-child(1){width:62%; height:46%; left:2%;  top:6%;  background:var(--blob-1); animation:a 24s ease-in-out infinite alternate}
+.wall i:nth-child(2){width:40%; height:32%; right:6%; top:26%; background:var(--blob-2); animation:b 28s ease-in-out infinite alternate}
+.wall i:nth-child(3){width:58%; height:44%; left:18%; bottom:4%; background:var(--blob-3); animation:a 32s ease-in-out infinite alternate-reverse}
+.wall i:nth-child(4){width:40%; height:34%; left:-4%; bottom:22%; background:var(--blob-4); animation:b 26s ease-in-out infinite alternate-reverse}
+@keyframes a{to{transform:translate3d(8%,6%,0) scale(1.08)}}
+@keyframes b{to{transform:translate3d(-7%,-5%,0) scale(1.1)}}
+@media (prefers-reduced-motion:reduce){ .wall i{animation:none} }
+
+.wrap{
+  max-width:440px; margin:0 auto;
+  padding-inline:16px; padding-block:calc(env(safe-area-inset-top, 0px) + 10px) 44px;
+  display:flex; flex-direction:column; gap:12px;
+}
+
+.glass{
+  position:relative; isolation:isolate;
+  border-radius:var(--r-card);
+  background:linear-gradient(180deg,var(--glass-top),var(--glass-bot));
+  -webkit-backdrop-filter:blur(22px) saturate(190%) brightness(1.04);
+  backdrop-filter:blur(22px) saturate(190%) brightness(1.04);
+  box-shadow:var(--glass-shadow);
+}
+.glass::before{
+  content:""; position:absolute; inset:0; border-radius:inherit; padding:1px; pointer-events:none;
+  background:linear-gradient(140deg,var(--rim-hi) 0%,var(--rim-lo) 32%,transparent 52%,var(--rim-lo) 78%,var(--rim-hi) 100%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor; mask-composite:exclude;
+}
+.glass::after{
+  content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:-1;
+  background:radial-gradient(90% 60% at 20% 0%,rgba(255,255,255,.28),transparent 60%);
+}
+.pad{padding:18px 20px 20px}
+
+header{padding:34px 4px 4px}
+h1{font-size:34px; line-height:41px; font-weight:700; letter-spacing:.37px; margin:0; text-wrap:balance}
+.sub{font-size:15px; line-height:20px; letter-spacing:-.24px; color:var(--label-2); margin:4px 0 0}
+.foot{font-size:13px; line-height:18px; letter-spacing:-.08px; color:var(--label-2)}
+.big{font-family:var(--sf-round); font-weight:600; font-variant-numeric:tabular-nums; letter-spacing:-.5px}
+
+.results{
+  position:sticky; top:calc(env(safe-area-inset-top, 0px) + 8px); z-index:5;
+  background:linear-gradient(180deg,var(--bar-top),var(--bar-bot));
+  -webkit-backdrop-filter:blur(30px) saturate(200%); backdrop-filter:blur(30px) saturate(200%);
+  padding:12px 14px 14px;
+}
+.seg.top{margin-top:0}
+.tiles{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px}
+.tile{border-radius:18px; padding:10px 14px 12px; display:flex; flex-direction:column; gap:2px; transition:background .25s}
+.tile small{font-size:12px; font-weight:600; letter-spacing:0}
+.tile > span{font-size:15px; color:var(--label-2)}
+.tile .big{font-size:40px; line-height:46px; color:var(--label); margin-right:4px}
+.tile.rc{background:var(--tint-wash)} .tile.rc small{color:var(--tint)}
+.tile.pt{background:var(--orange-wash)} .tile.pt small{color:var(--orange)}
+.tile.dim{background:var(--grey-wash)} .tile.dim small{color:var(--label-2)} .tile.dim .big{color:var(--label-2)}
+.hero{margin-top:12px; border-radius:20px; padding:12px 16px 14px; background:var(--tint-wash); display:flex; flex-direction:column; gap:2px}
+.hero small{font-size:12px; font-weight:600; color:var(--tint)}
+.hero > span{font-size:17px; color:var(--label-2)}
+.hero .big{font-size:52px; line-height:58px; color:var(--label); margin-right:4px}
+.hero em{font-style:normal; font-size:13px; line-height:18px; letter-spacing:-.08px; color:var(--label-2)}
+.tiles.sm{margin-top:10px}
+.tiles.sm .tile{padding:8px 12px 10px}
+.tiles.sm .big{font-size:28px; line-height:34px}
+.vline{margin:10px 2px 0; font-size:13px; line-height:18px; letter-spacing:-.08px; color:var(--label-2)}
+.vline .chip{display:inline-block; margin-right:6px; vertical-align:1px}
+.chip{font-size:11px; font-weight:600; letter-spacing:.06px; padding:2px 8px; border-radius:999px; line-height:16px}
+.chip.rc{background:var(--tint-wash); color:var(--tint)}
+.chip.pt{background:var(--orange-wash); color:var(--orange)}
+.chip.either{background:var(--grey-wash); color:var(--label-2)}
+
+.ctl-h{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px}
+.ctl-h h2{font-size:20px; line-height:25px; font-weight:600; letter-spacing:.38px; margin:0}
+.srow{display:flex; justify-content:space-between; align-items:baseline; margin-top:12px}
+.srow .val{font-size:17px; color:var(--label-2)}
+.srow .val .big{font-size:24px; color:var(--label); margin-right:3px}
+
+input[type=range]{-webkit-appearance:none; appearance:none; width:100%; height:40px; background:transparent; margin:0; display:block}
+input[type=range]::-webkit-slider-runnable-track{
+  height:6px; border-radius:99px;
+  background:linear-gradient(90deg,var(--tint) 0 var(--fill-pc,40%),var(--fill) var(--fill-pc,40%) 100%);
+}
+input[type=range]::-moz-range-track{height:6px; border-radius:99px; background:var(--fill)}
+input[type=range]::-moz-range-progress{height:6px; border-radius:99px; background:var(--tint)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; appearance:none;
+  width:28px; height:28px; border-radius:50%; margin-top:-11px;
+  background:#fff; border:0; box-shadow:var(--thumb-shadow); cursor:grab;
+}
+input[type=range]::-moz-range-thumb{width:28px; height:28px; border-radius:50%; background:#fff; border:0; box-shadow:var(--thumb-shadow)}
+input[type=range]:focus-visible{outline:none}
+input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 4px var(--tint-wash),var(--thumb-shadow)}
+.ticks{display:flex; justify-content:space-between; font-size:11px; color:var(--label-3); margin-top:-6px; font-variant-numeric:tabular-nums}
+
+.seg{display:grid; gap:2px; padding:3px; border-radius:999px; background:var(--fill); margin-top:14px}
+.seg.two{grid-template-columns:1fr 1fr}
+.seg.three{grid-template-columns:1fr 1fr 1fr}
+.seg button{
+  font:inherit; font-size:13px; font-weight:500; letter-spacing:-.08px; color:var(--label);
+  background:transparent; border:0; border-radius:999px; min-height:36px; padding:0 6px;
+  cursor:pointer; transition:background .22s cubic-bezier(.3,.7,.2,1),box-shadow .22s;
+  -webkit-tap-highlight-color:transparent;
+}
+.seg button[aria-pressed=true]{background:var(--pill); box-shadow:var(--pill-shadow); font-weight:600}
+.seg button:focus-visible{outline:2px solid var(--tint); outline-offset:1px}
+
+.note{font-size:13px; line-height:18px; letter-spacing:-.08px; color:var(--label-2); margin:12px 0 0}
+.flag{
+  display:none; font-size:13px; line-height:18px; letter-spacing:-.08px;
+  color:var(--orange); background:var(--orange-wash); border-radius:12px; padding:8px 12px; margin:10px 0 0;
+}
+.flag.on{display:block}
+
+.pick{
+  margin-top:14px; padding:12px 14px; border-radius:var(--r-inner); background:var(--fill);
+  display:grid; grid-template-columns:auto 1fr; align-items:center; gap:14px;
+}
+.slabbox{width:124px; height:88px; display:flex; align-items:center; justify-content:center}
+.slab{position:relative; background:var(--slab-fill); border-radius:3px; transition:width .25s ease,height .25s ease}
+.edge{position:absolute; background:transparent; border:0; padding:0; margin:0; cursor:pointer; -webkit-tap-highlight-color:transparent}
+.edge::after{content:""; position:absolute; border-radius:2px; background:var(--label); transition:background .2s}
+.edge.top{left:-4px; right:-4px; top:-20px; height:40px}
+.edge.bot{left:-4px; right:-4px; bottom:-20px; height:40px}
+.edge.top::after,.edge.bot::after{left:4px; right:4px; top:18px; height:4px}
+.edge.lft{top:-4px; bottom:-4px; left:-20px; width:40px}
+.edge.rgt{top:-4px; bottom:-4px; right:-20px; width:40px}
+.edge.lft::after,.edge.rgt::after{top:4px; bottom:4px; left:18px; width:4px}
+.edge[aria-pressed=false]::after{background:repeating-linear-gradient(90deg,var(--orange-ui) 0 6px,transparent 6px 10px)}
+.edge.lft[aria-pressed=false]::after,.edge.rgt[aria-pressed=false]::after{background:repeating-linear-gradient(180deg,var(--orange-ui) 0 6px,transparent 6px 10px)}
+.edge:focus-visible{outline:2px solid var(--tint); outline-offset:-8px; border-radius:6px}
+.ptxt{min-width:0}
+.ptxt b{display:block; font-size:15px; font-weight:600; letter-spacing:-.24px; line-height:20px}
+.ptxt span{display:block; font-size:13px; line-height:17px; color:var(--label-2); letter-spacing:-.08px}
+.ptxt .lg{margin-top:6px; font-size:11px; color:var(--label-3); line-height:15px}
+.ptxt .lg i{display:inline-block; width:14px; height:3px; border-radius:2px; vertical-align:middle; margin-right:4px}
+.ptxt .lg .c{background:var(--label)}
+.ptxt .lg .d{background:repeating-linear-gradient(90deg,var(--orange-ui) 0 4px,transparent 4px 7px)}
+
+details summary{
+  list-style:none; cursor:pointer; padding:0 20px; min-height:54px;
+  font-size:17px; letter-spacing:-.41px; display:flex; justify-content:space-between; align-items:center;
+  -webkit-tap-highlight-color:transparent;
+}
+details summary::-webkit-details-marker{display:none}
+details summary .chev{
+  width:9px; height:9px; border-right:2.2px solid var(--label-3); border-bottom:2.2px solid var(--label-3);
+  transform:rotate(-45deg); transition:transform .25s; margin-right:4px;
+}
+details[open] summary .chev{transform:rotate(45deg)}
+details summary:focus-visible{outline:2px solid var(--tint); outline-offset:-4px; border-radius:var(--r-card)}
+.inner{padding:0 20px 20px; border-top:.5px solid var(--sep)}
+.fields{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px}
+label{display:block}
+label .foot{display:block; margin-bottom:6px}
+input[type=number]{
+  width:100%; font:inherit; font-size:17px; color:var(--label); font-variant-numeric:tabular-nums;
+  background:var(--fill); border:0; border-radius:12px; padding:0 14px; min-height:44px;
+}
+input[type=number]:focus{outline:2px solid var(--tint); outline-offset:0}
+.outcome{margin:14px 0 0; font-size:15px; line-height:20px; letter-spacing:-.24px; color:var(--label-2)}
+.outcome b{color:var(--label); font-weight:600}
+
+footer{font-size:12px; line-height:16px; color:var(--label-2); padding:6px 6px 0}
+
+@media (max-width:360px){
+  .tile .big{font-size:34px}
+  .seg button{font-size:12px}
+  .pick{grid-template-columns:1fr; justify-items:center; text-align:center}
+}
+</style>
+</head>
+<body>
+
+<div class="wall"><i></i><i></i><i></i><i></i></div>
+
+<div class="wrap">
+
+  <header>
+    <h1>Beam Depth Finder</h1>
+    <p class="sub">First-sketch depth for beams and slabs, reinforced or post-tensioned.</p>
+  </header>
+
+  <section class="glass results" aria-live="polite">
+    <div class="seg three top" role="group" aria-label="Member" id="memSeg">
+      <button type="button" data-mem="beam" aria-pressed="true">Beam</button>
+      <button type="button" data-mem="oneway" aria-pressed="false">One-way slab</button>
+      <button type="button" data-mem="twoway" aria-pressed="false">Two-way slab</button>
+    </div>
+
+    <div class="res" data-for="beam">
+      <div class="tiles">
+        <div class="tile rc"><small>RC beam</small><span><span class="big" id="bRC">925</span>mm</span></div>
+        <div class="tile pt"><small>PT beam</small><span><span class="big" id="bPT">550</span>mm</span></div>
+      </div>
+      <p class="vline"><span class="chip either" id="cBeam">Either</span><span id="nBeam"></span></p>
+    </div>
+
+    <div class="res" data-for="oneway" hidden>
+      <div class="hero"><small>IS 456 · load and deflection</small><span><span class="big" id="oEng">–</span>mm</span><em id="oGov"></em></div>
+      <div class="tiles sm">
+        <div class="tile rc"><small>RC · span rule</small><span><span class="big" id="oRC">195</span>mm</span></div>
+        <div class="tile pt"><small>PT · span rule</small><span><span class="big" id="oPT">155</span>mm</span></div>
+      </div>
+      <p class="vline"><span class="chip rc" id="cOne">RC</span><span id="nOne"></span></p>
+    </div>
+
+    <div class="res" data-for="twoway" hidden>
+      <div class="hero"><small>IS 456 · load and deflection</small><span><span class="big" id="tEng">–</span>mm</span><em id="tGov"></em></div>
+      <div class="tiles sm">
+        <div class="tile rc" id="tAbox"><small>ACI 318-83</small><span><span class="big" id="tA">200</span>mm</span></div>
+        <div class="tile rc" id="tBbox"><small>ACI 318-08</small><span><span class="big" id="tB">185</span>mm</span></div>
+      </div>
+      <p class="vline"><span class="chip rc" id="cTwo">Normal load</span><span id="nTwo"></span></p>
+    </div>
+  </section>
+
+  <section class="glass pad" data-for="beam">
+    <div class="ctl-h"><h2>Beam</h2><span class="foot">400 mm minimum</span></div>
+    <div class="srow"><span class="foot">Effective span</span><span class="val"><span class="big" id="vBeam">12.0</span>m</span></div>
+    <input type="range" id="sBeam" min="3" max="24" step="0.5" value="12" aria-label="Beam effective span in metres">
+    <div class="ticks"><span>3 m</span><span>10</span><span>17</span><span>24 m</span></div>
+    <div class="seg two" role="group" aria-label="Beam support condition" id="supBeam">
+      <button type="button" data-sup="continuous" aria-pressed="true">Continuous</button>
+      <button type="button" data-sup="cantilever" aria-pressed="false">Cantilever</button>
+    </div>
+    <p class="flag" id="fBeam"></p>
+  </section>
+
+  <section class="glass pad" data-for="oneway" hidden>
+    <div class="ctl-h"><h2>One-way slab</h2></div>
+    <div class="srow"><span class="foot">Effective span</span><span class="val"><span class="big" id="vOne">5.0</span>m</span></div>
+    <input type="range" id="sOne" min="3" max="15" step="0.1" value="5" aria-label="One-way slab effective span in metres">
+    <div class="ticks"><span>3 m</span><span>7</span><span>11</span><span>15 m</span></div>
+    <div class="seg two" role="group" aria-label="One-way slab support condition" id="supOne">
+      <button type="button" data-sup="continuous" aria-pressed="true">Continuous</button>
+      <button type="button" data-sup="cantilever" aria-pressed="false">Cantilever</button>
+    </div>
+    <div class="seg three" role="group" aria-label="Slab load">
+      <button type="button" data-load="normal" aria-pressed="true">Normal</button>
+      <button type="button" data-load="medium" aria-pressed="false">Medium</button>
+      <button type="button" data-load="heavy" aria-pressed="false">Heavy</button>
+    </div>
+    <p class="note loadcap"></p>
+    <div class="seg three" role="group" aria-label="Steel grade">
+      <button type="button" data-fy="415" aria-pressed="false">Fe 415</button>
+      <button type="button" data-fy="500" aria-pressed="true">Fe 500</button>
+      <button type="button" data-fy="550" aria-pressed="false">Fe 550</button>
+    </div>
+    <p class="note">M40 concrete, 30 mm cover (moderate exposure).</p>
+    <p class="flag" id="fOne"></p>
+  </section>
+
+  <section class="glass pad" data-for="twoway" hidden>
+    <div class="ctl-h"><h2>Two-way slab</h2><span class="foot">from your ACI sheet</span></div>
+    <div class="srow"><span class="foot">Short span lx, clear</span><span class="val"><span class="big" id="vLx">5.3</span>m</span></div>
+    <input type="range" id="sLx" min="3" max="24" step="0.1" value="5.3" aria-label="Short span in metres">
+    <div class="ticks"><span>3 m</span><span>10</span><span>17</span><span>24 m</span></div>
+    <div class="srow"><span class="foot">Long span ly</span><span class="val"><span class="big" id="vLy">7.7</span>m</span></div>
+    <input type="range" id="sLy" min="3" max="24" step="0.1" value="7.7" aria-label="Long span in metres">
+    <div class="ticks"><span>3 m</span><span>10</span><span>17</span><span>24 m</span></div>
+
+    <div class="pick">
+      <div class="slabbox">
+        <div class="slab" id="slab">
+          <button type="button" class="edge top" id="eTop" aria-pressed="false"></button>
+          <button type="button" class="edge bot" id="eBot" aria-pressed="false"></button>
+          <button type="button" class="edge lft" id="eLft" aria-pressed="false"></button>
+          <button type="button" class="edge rgt" id="eRgt" aria-pressed="false"></button>
+        </div>
+      </div>
+      <div class="ptxt">
+        <b id="ptNum">Type 9 · ly/lx 1.45</b>
+        <span id="ptName">Four edges discontinuous</span>
+        <div class="lg"><i class="c"></i>continuous &nbsp; <i class="d"></i>discontinuous<br>Tap an edge to change it</div>
+      </div>
+    </div>
+
+    <div class="seg three" role="group" aria-label="Slab load">
+      <button type="button" data-load="normal" aria-pressed="true">Normal</button>
+      <button type="button" data-load="medium" aria-pressed="false">Medium</button>
+      <button type="button" data-load="heavy" aria-pressed="false">Heavy</button>
+    </div>
+    <p class="note loadcap"></p>
+    <div class="seg three" role="group" aria-label="Steel grade">
+      <button type="button" data-fy="415" aria-pressed="false">Fe 415</button>
+      <button type="button" data-fy="500" aria-pressed="true">Fe 500</button>
+      <button type="button" data-fy="550" aria-pressed="false">Fe 550</button>
+    </div>
+    <p class="note">M40 concrete, 30 mm cover (moderate exposure).</p>
+    <p class="flag" id="fTwo"></p>
+  </section>
+
+  <details class="glass" id="loadBox">
+    <summary>Check against a load<span class="chev" aria-hidden="true"></span></summary>
+    <div class="inner">
+      <div class="fields" id="fields">
+        <label><span class="foot" id="wLab">Service load, kN/m</span><input type="number" id="w" value="40" min="0" step="1" inputmode="decimal" aria-label="Service load"></label>
+        <label id="bWrap"><span class="foot">Width b, mm</span><input type="number" id="b" value="300" min="100" step="25" inputmode="numeric" aria-label="Beam width in millimetres"></label>
+      </div>
+      <div class="seg three" role="group" aria-label="Concrete grade" id="fckSeg">
+        <button type="button" data-fck="25" aria-pressed="false">M25</button>
+        <button type="button" data-fck="30" aria-pressed="true">M30</button>
+        <button type="button" data-fck="35" aria-pressed="false">M35</button>
+      </div>
+      <p class="outcome" id="outcome"></p>
+    </div>
+  </details>
+
+  <footer>
+    Beam: RC at L/D 12–15 continuous or 6–10 cantilever, PT at 20–25 or 10–14, rounded to 25 mm, 400 mm minimum for both. IS 456 Cl 23.2.1 alone would allow shallower beams, but they need heavy steel and rarely build economically.
+    One-way slab: RC at L/d 30–35 continuous or 7–10 cantilever, PT at 40–45 or 10–14, plus 35 mm to the top of the bar, rounded up to 5 mm.
+    Two-way slab: ACI 318-83 coefficient for the panel type, interpolated on ly/lx, times the clear short span; and D = ly(0.8 + 144.6fy/200 000)/(36 + 9β). Both rounded up to 5 mm; deflection only.
+    Load-based slab thickness: the thinnest slab, in 5 mm steps from 100 mm, that passes IS 456 bending (Mu,lim), shear (k·τc, Cl 40.2.1.1) and computed deflection (Annex C): short-term with Ieff, creep with θ = 1.6, shrinkage with εcs = 0.0003; total ≤ span/250 and after finishes ≤ span/350 or 20 mm. Moments: Table 12 end span for one-way, Table 26 short span for two-way. Self weight at 25 kN/m³, steel taken as just what strength needs, sustained live load 25% (50% above 3 kN/m²), as IS 1893.
+    PT ratios are practice, not code: IS 1343 requires deflection to be computed. First-sketch sizing, not a design.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var M = {
+    beam:{
+      name:'beam', onD:true, minD:400, step:25, cover:0, ptFrom:11, ptMid:15, ptHigh:20, sane:99,
+      continuous:{ rc:13, pt:22, basic:26, mcoef:10 },
+      cantilever:{ rc:8,  pt:12, basic:7,  mcoef:2 }
+    },
+    oneway:{
+      name:'one-way slab', onD:false, minD:0, step:5, cover:35, ptFrom:7, ptMid:9, ptHigh:13, sane:8,
+      continuous:{ rc:32, pt:42, basic:26, mcoef:10 },
+      cantilever:{ rc:8,  pt:12, basic:7,  mcoef:2 }
+    }
+  };
+
+  var COLS = [1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.75, 2];
+  var TAB = [
+    [23.91,25.74,27.58,29.18,30.89,32.35,35.98,39.29],
+    [24.58,26.48,28.30,30.85,31.73,33.33,37.88,40.49],
+    [24.58,26.56,28.47,30.32,32.11,33.85,37.96,41.77],
+    [25.29,27.34,29.33,31.26,33.12,34.92,39.19,43.14],
+    [25.29,27.26,29.16,30.97,32.71,34.38,38.26,41.77],
+    [25.29,27.43,29.51,31.55,33.54,35.48,40.16,44.59],
+    [26.04,28.18,30.25,32.25,34.19,36.07,40.50,44.59],
+    [26.04,28.26,30.44,32.56,34.64,36.67,41.54,46.15],
+    [26.83,29.16,31.43,33.65,35.81,37.93,43.82,47.03]
+  ];
+  var PNAME = [
+    'Interior panel',
+    'One short edge discontinuous',
+    'One long edge discontinuous',
+    'Two adjacent edges discontinuous',
+    'Two short edges discontinuous',
+    'Two long edges discontinuous',
+    'Three edges discontinuous, one long edge continuous',
+    'Three edges discontinuous, one short edge continuous',
+    'Four edges discontinuous'
+  ];
+  var PTYPE = [[1,3,6],[2,4,8],[5,7,9]];
+
+  function matchLE(v){ var i = 0; for (var k = 0; k < COLS.length; k++) if (COLS[k] <= v + 1e-9) i = k; return i; }
+  function aci83coef(type, beta){
+    var b14 = beta;
+    var b13 = b14 < 1.5 ? Math.floor(b14 * 10 + 1e-9) / 10 : Math.floor(b14 * 4 + 1e-9) / 4;
+    var b15 = b13 < 1.5 ? b13 + 0.1 : b13 + 0.25;
+    var row = TAB[type - 1], c13 = row[matchLE(b13)], c15 = row[matchLE(b15)];
+    var c14 = c13 + (b14 - b13) * (c15 - c13) / (b15 - b13);
+    return Math.round(c14 * 100) / 100;
+  }
+  function ceil5(v){ return Math.ceil(v / 5 - 1e-9) * 5; }
+  function twoWay(a, b, type, fy){
+    var lx = Math.min(a, b), ly = Math.max(a, b);
+    var beta = Math.round(ly / lx * 100 + 1e-9) / 100;
+    var coef = aci83coef(type, beta);
+    return {
+      coef:coef, lx:lx, ly:ly, beta:beta, swapped:b < a,
+      d83: ceil5(coef * lx),
+      d08: ceil5(ly * 1000 * (0.8 + 144.6 * fy / 200000) / (36 + 9 * beta))
+    };
+  }
+
+  var LOADS = {
+    normal:{ name:'Normal load', sidl:2, fill:0, ll:3,  cap:'SIDL 2 + live 3 kN/m², plus self weight.' },
+    medium:{ name:'Medium load', sidl:2, fill:2, ll:3,  cap:'SIDL 2 + filling 2 + live 3 kN/m², plus self weight.' },
+    heavy: { name:'Heavy load',  sidl:2, fill:3, ll:15, cap:'SIDL 2 + filling 3 + live 15 kN/m², plus self weight.' }
+  };
+  var FCK = 40, COVER = 30, ES = 200000, THETA = 1.6, ECS = 0.0003;
+  var T26N = [
+    [0.032,0.037,0.043,0.047,0.051,0.053,0.060,0.065],
+    [0.037,0.043,0.048,0.051,0.055,0.057,0.064,0.068],
+    [0.037,0.044,0.052,0.057,0.063,0.067,0.077,0.085],
+    [0.047,0.053,0.060,0.065,0.071,0.075,0.084,0.091],
+    [0.045,0.049,0.052,0.056,0.059,0.060,0.065,0.069],
+    null,
+    [0.057,0.064,0.071,0.076,0.080,0.084,0.091,0.097],
+    null, null
+  ];
+  var T26P = [
+    [0.024,0.028,0.032,0.036,0.039,0.041,0.045,0.049],
+    [0.028,0.032,0.036,0.039,0.041,0.044,0.048,0.052],
+    [0.028,0.033,0.039,0.044,0.047,0.051,0.059,0.065],
+    [0.035,0.040,0.045,0.049,0.053,0.056,0.063,0.069],
+    [0.035,0.037,0.040,0.043,0.044,0.045,0.049,0.052],
+    [0.035,0.043,0.051,0.057,0.063,0.068,0.080,0.088],
+    [0.043,0.048,0.053,0.057,0.060,0.064,0.069,0.073],
+    [0.043,0.051,0.059,0.065,0.071,0.076,0.087,0.096],
+    [0.056,0.064,0.072,0.079,0.085,0.089,0.100,0.107]
+  ];
+  function lerpCol(row, beta){
+    var b = Math.min(Math.max(beta, 1), 2);
+    for (var k = 0; k < COLS.length - 1; k++)
+      if (b <= COLS[k+1] + 1e-9) return row[k] + (b - COLS[k]) * (row[k+1] - row[k]) / (COLS[k+1] - COLS[k]);
+    return row[COLS.length - 1];
+  }
+  function ieff(E, As, d, D, M){
+    var b = 1000, m = ES / E, Igr = b * D * D * D / 12, Mr = 0.7 * Math.sqrt(FCK) * Igr / (D / 2);
+    if (M <= Mr) return Igr;
+    var mA = m * As, x = (-mA + Math.sqrt(mA * mA + 2 * b * mA * d)) / b;
+    var Icr = b * x * x * x / 3 + mA * (d - x) * (d - x);
+    var den = 1.2 - (Mr / M) * ((d - x / 3) / d) * (1 - x / d);
+    var I = den > 0 ? Icr / den : Igr;
+    return Math.min(Igr, Math.max(Icr, I));
+  }
+  function slabTry(D, c){
+    var b = 1000, fy = c.fy, d = D - COVER - (D < 200 ? 5 : 6), Lm = c.l * 1000;
+    var ld = c.load, wD = 25 * D / 1000 + ld.sidl + ld.fill, wL = ld.ll, psi = wL > 3 ? 0.5 : 0.25;
+    var Mu = c.mom(1.5 * wD, 1.5 * wL);
+    var xm = 700 / (1100 + 0.87 * fy), Rlim = 0.36 * xm * (1 - 0.42 * xm) * FCK;
+    var uStr = Math.max(Mu.pos, Mu.neg) * 1e6 / (Rlim * b * d * d);
+    function ast(M){
+      var k = 4.6 * M * 1e6 / (FCK * b * d * d);
+      var a = k < 1 ? 0.5 * FCK / fy * (1 - Math.sqrt(1 - k)) * b * d : 0.04 * b * d;
+      return Math.max(a, 0.0012 * b * D);
+    }
+    var AsM = ast(c.cant ? Mu.neg : Mu.pos);
+    var AsV = Mu.neg > 0 ? ast(Mu.neg) : AsM;
+    var tv = c.vco * 1.5 * (wD + wL) * c.l * 1000 / (b * d);
+    var pv = Math.min(3, Math.max(0.15, 100 * AsV / (b * d))), bt = Math.max(1, 0.8 * FCK / (6.89 * pv));
+    var tc = 0.85 * Math.sqrt(0.8 * FCK) * (Math.sqrt(1 + 5 * bt) - 1) / (6 * bt);
+    var ks = D >= 300 ? 1 : D <= 150 ? 1.3 : 1.3 - (D - 150) * 0.002;
+    var uShr = Math.max(tv / (ks * tc), tv / 2.0);
+    var Ec = 5000 * Math.sqrt(FCK), Ecc = Ec / (1 + THETA);
+    var Mt = c.mom(wD, wL), Mp = c.mom(wD, psi * wL), Md = c.mom(wD, 0);
+    var Mcrit = (c.cant ? Mt.neg : Mt.pos) * 1e6;
+    var I1 = ieff(Ec, AsM, d, D, Mcrit), I2 = ieff(Ecc, AsM, d, D, Mcrit);
+    function dfl(M, E, I){
+      return c.cant ? 0.25 * Lm * Lm * M.neg * 1e6 / (E * I)
+                    : Lm * Lm * (5 * M.pos / 48 - M.sum / 96) * 1e6 / (E * I);
+    }
+    var dT = dfl(Mt, Ec, I1), dD = dfl(Md, Ec, I1), dP = dfl(Mp, Ec, I1);
+    var dCr = Math.max(0, dfl(Mp, Ecc, I2) - dP);
+    var pt = 100 * AsM / (b * d), k4 = Math.min(1, (pt >= 1 ? 0.65 : 0.72) * Math.sqrt(pt));
+    var dCs = c.k3 * k4 * ECS / D * Lm * Lm;
+    var tot = dT + dCr + dCs, aft = (dT - dD) + dCr + dCs;
+    var lim1 = Lm / 250, lim2 = Math.min(Lm / 350, 20);
+    var u = { tot:tot / lim1, aft:aft / lim2, str:uStr, shr:uShr };
+    return { D:D, ok:(u.tot <= 1 && u.aft <= 1 && u.str <= 1 && u.shr <= 1), u:u, tot:tot, aft:aft, lim1:lim1, lim2:lim2 };
+  }
+  function slabSolve(c){
+    var r, prev = null;
+    for (var D = 100; D <= 600; D += 5){ r = slabTry(D, c); if (r.ok){ r.prev = prev; return r; } prev = r; }
+    r.over = true; return r;
+  }
+  function showEng(idN, idG, r){
+    $(idN).textContent = r.over ? '600+' : r.D;
+    if (r.over){ $(idG).textContent = 'Over 600 mm: not practical as a solid slab. Add beams or go post-tensioned.'; return; }
+    var p = r.prev;
+    if (!p){ $(idG).textContent = 'The 100 mm practical minimum governs.'; return; }
+    var g = 'tot';
+    ['aft','str','shr'].forEach(function(k){ if (p.u[k] > p.u[g]) g = k; });
+    var t, at = p.D + ' mm';
+    if (g === 'tot') t = 'Total deflection governs. At ' + at + ' it would be ' + p.tot.toFixed(1) + ' mm, over the ' + p.lim1.toFixed(1) + ' mm limit (span/250).';
+    else if (g === 'aft') t = 'Deflection after finishes governs. At ' + at + ' it would be ' + p.aft.toFixed(1) + ' mm, over the ' + p.lim2.toFixed(1) + ' mm limit (' + (p.lim2 >= 20 ? '20 mm cap' : 'span/350') + ').';
+    else if (g === 'str') t = 'Bending strength governs. At ' + at + ' the moment would be ' + Math.round(100 * p.u.str) + '% of Mu,lim.';
+    else t = 'Shear governs. At ' + at + ' shear would be ' + Math.round(100 * p.u.shr) + '% of capacity.';
+    $(idG).textContent = t + ' At ' + r.D + ' mm: ' + r.tot.toFixed(1) + ' mm total.';
+  }
+  function owMom(sup, L){
+    var L2 = L * L;
+    if (sup === 'cantilever') return function(wD, wL){ return { pos:0, neg:(wD + wL) * L2 / 2, sum:0 }; };
+    return function(wD, wL){ var n = (wD / 10 + wL / 9) * L2; return { pos:(wD / 12 + wL / 10) * L2, neg:n, sum:n }; };
+  }
+
+  function rnd(v,s){ return Math.round(v/s)*s; }
+  function up(v,s){ return Math.ceil(v/s - 1e-9)*s; }
+  function linDepths(key, L, sup){
+    var m = M[key], r = m[sup], mm = L*1000, Drc, Dpt;
+    if (m.onD){ Drc = rnd(mm/r.rc, m.step); Dpt = rnd(mm/r.pt, m.step); }
+    else { Drc = up(mm/r.rc + m.cover, m.step); Dpt = up(mm/r.pt + m.cover, m.step); }
+    var floored = false;
+    if (m.minD && Drc < m.minD){ Drc = m.minD; floored = true; }
+    if (m.minD && Dpt < m.minD){ Dpt = m.minD; floored = true; }
+    return { Drc:Drc, Dpt:Dpt, floored:floored, m:m, r:r };
+  }
+  function linVerdict(L, D){
+    var m = D.m, save = D.Drc - D.Dpt, pc = D.Drc ? Math.round(100*save/D.Drc) : 0;
+    if (D.floored && save === 0) return ['rc','RC','Both sit on the 400 mm minimum here, so PT buys no depth at all.'];
+    if (L < m.ptFrom) return ['rc','RC','PT rarely pays below about ' + m.ptFrom + ' m: anchorages and stressing cost the same at any span, and there is too little depth to win back.'];
+    if (L < m.ptMid) return ['either','Either','Price both. PT saves ' + save + ' mm, which pays off if floor-to-floor height is tight.'];
+    if (L < m.ptHigh) return ['pt','PT','PT is usually cheaper from about ' + m.ptMid + ' m. It saves ' + save + ' mm, ' + pc + '% of the depth.'];
+    return ['pt','PT','RC becomes impractical here at ' + D.Drc + ' mm. PT saves ' + save + ' mm, ' + pc + '% of the depth.'];
+  }
+
+  var S = {
+    beam:{ sup:'continuous' }, oneway:{ sup:'continuous' },
+    fy:500, fck:30, mem:'beam', load:'normal',
+    edges:{ top:false, bot:false, lft:false, rgt:false }
+  };
+  var $ = function(id){ return document.getElementById(id); };
+
+  function setFill(el){
+    var mn = parseFloat(el.min), mx = parseFloat(el.max), v = parseFloat(el.value);
+    el.style.setProperty('--fill-pc', ((v - mn) / (mx - mn) * 100).toFixed(1) + '%');
+  }
+  function setFlag(el, msg){ el.className = msg ? 'flag on' : 'flag'; el.textContent = msg || ''; }
+  function setChip(el, cls, txt){ el.className = 'chip ' + cls; el.textContent = txt; }
+
+  function drawLin(key, L, ids){
+    var sup = S[key].sup, D = linDepths(key, L, sup), v = linVerdict(L, D);
+    $(ids.rc).textContent = D.Drc; $(ids.pt).textContent = D.Dpt;
+    setChip($(ids.chip), v[0], v[1]);
+    $(ids.note).textContent = v[2];
+    var msg = '';
+    if (D.floored) msg = 'Held at the 400 mm minimum. The span alone would allow less.';
+    else if (key === 'oneway' && sup === 'continuous' && L > D.m.sane)
+      msg = 'Past about ' + D.m.sane + ' m a one-way slab stops making sense on its own. Span onto beams, or use a PT flat slab or a ribbed deck.';
+    setFlag($(ids.flag), msg);
+    return D;
+  }
+
+  function panelType(){
+    var e = S.edges;
+    var s = (e.lft ? 0 : 1) + (e.rgt ? 0 : 1), l = (e.top ? 0 : 1) + (e.bot ? 0 : 1);
+    return PTYPE[s][l];
+  }
+  function drawTwo(){
+    var lxIn = parseFloat($('sLx').value), lyIn = parseFloat($('sLy').value);
+    $('vLx').textContent = lxIn.toFixed(1); $('vLy').textContent = lyIn.toFixed(1);
+    var t = panelType(), R = twoWay(lxIn, lyIn, t, S.fy);
+
+    var r = Math.min(R.beta, 2.5), w = Math.min(92, 54 * r), h = w / r;
+    $('slab').style.width = w.toFixed(0) + 'px'; $('slab').style.height = h.toFixed(0) + 'px';
+    [['top','eTop','Long edge, top'],['bot','eBot','Long edge, bottom'],['lft','eLft','Short edge, left'],['rgt','eRgt','Short edge, right']]
+      .forEach(function(z){
+        var b = $(z[1]); b.setAttribute('aria-pressed', String(S.edges[z[0]]));
+        b.setAttribute('aria-label', z[2] + ': ' + (S.edges[z[0]] ? 'continuous' : 'discontinuous') + '. Tap to change.');
+      });
+    $('ptNum').textContent = 'Type ' + t + ' · ly/lx ' + R.beta.toFixed(2);
+    $('ptName').textContent = PNAME[t - 1];
+
+    var bc = Math.min(R.beta, 2), ax = lerpCol(T26P[t - 1], bc), an = T26N[t - 1] ? lerpCol(T26N[t - 1], bc) : 0;
+    var nEnds = an ? (S.edges.top ? 1 : 0) + (S.edges.bot ? 1 : 0) : 0, lx = R.lx;
+    showEng('tEng', 'tGov', slabSolve({
+      l:lx, cant:false, vco:0.5, fy:S.fy, load:LOADS[S.load],
+      k3: nEnds === 2 ? 0.063 : nEnds === 1 ? 0.086 : 0.125,
+      mom:function(wD, wL){ var w = (wD + wL) * lx * lx; return { pos:ax * w, neg:an * w, sum:nEnds * an * w }; }
+    }));
+
+    $('tA').textContent = R.d83; $('tB').textContent = R.d08;
+    var gov = Math.max(R.d83, R.d08);
+    $('tAbox').className = 'tile ' + (R.d83 < R.d08 ? 'dim' : 'rc');
+    $('tBbox').className = 'tile ' + (R.d08 < R.d83 ? 'dim' : 'rc');
+
+    if (R.beta > 2 + 1e-9){
+      setChip($('cTwo'), 'pt', 'One-way');
+      $('nTwo').textContent = 'ly/lx is ' + R.beta.toFixed(2) + ', over 2, so the slab spans one way. Use the one-way slab tab instead.';
+      setFlag($('fTwo'), 'This is a one-way slab. The table is held at its 2.0 column.');
+    } else {
+      setChip($('cTwo'), 'rc', LOADS[S.load].name);
+      $('nTwo').textContent = 'ACI rules, no load: take ' + gov + ' mm. ' + (R.d83 >= R.d08 ? 'The 1983 table' : 'The 2008 equation') + ' governs; coefficient ' + R.coef.toFixed(2) + ' × lx ' + R.lx.toFixed(1) + ' m by the table.';
+      setFlag($('fTwo'), R.swapped ? 'The long span is shorter than the short span, so the two have been swapped: lx ' + R.lx.toFixed(1) + ' m, ly ' + R.ly.toFixed(1) + ' m.' : '');
+    }
+  }
+
+  function drawLoad(Dbeam){
+    if (S.mem !== 'beam') return;
+    var m = M.beam, L = parseFloat($('sBeam').value);
+    var r = m[S.beam.sup], Drc = Dbeam.Drc;
+    var w = parseFloat($('w').value), b = parseFloat($('b').value);
+    var out = $('outcome');
+    if (!(w > 0) || !(b > 0)) { out.innerHTML = 'Enter a load to see what strength needs.'; return; }
+    var Mu = 1.5 * w * L * L / r.mcoef;
+    var Rlim = 0.1377 * S.fck;
+    var d = Math.sqrt(Mu * 1e6 / (Rlim * b));
+    var Dmin = up(d + 50, m.step);
+    if (Dmin < m.minD) Dmin = m.minD;
+    var tail = Dmin <= Drc
+      ? 'The ' + Drc + ' mm above covers it, with ' + Math.round(100*(Drc-Dmin)/Drc) + '% in hand.'
+      : 'That is deeper than the ' + Drc + ' mm above. Strength governs, so take <b>' + Dmin + ' mm</b> or widen the beam.';
+    out.innerHTML =
+      'Beam, ' + L.toFixed(1) + ' m ' + S.beam.sup + '. ' +
+      'Factored moment <b>' + Mu.toFixed(0) + ' kNm</b> (w<sub>u</sub>L²/' + r.mcoef + '). ' +
+      'Singly reinforced at M' + S.fck + ' it needs <b>d ≥ ' + Math.round(d) + ' mm</b>, so <b>D ≥ ' + Dmin + ' mm</b>. ' + tail;
+  }
+
+  function draw(){
+    ['sBeam','sOne','sLx','sLy'].forEach(function(id){ setFill($(id)); });
+    var Lb = parseFloat($('sBeam').value), Lo = parseFloat($('sOne').value);
+    $('vBeam').textContent = Lb.toFixed(1); $('vOne').textContent = Lo.toFixed(1);
+    var Db = drawLin('beam', Lb, { rc:'bRC', pt:'bPT', chip:'cBeam', note:'nBeam', flag:'fBeam' });
+    drawLin('oneway', Lo, { rc:'oRC', pt:'oPT', chip:'cOne', note:'nOne', flag:'fOne' });
+    var so = S.oneway.sup, cant = (so === 'cantilever');
+    showEng('oEng', 'oGov', slabSolve({ l:Lo, mom:owMom(so, Lo), cant:cant, k3:cant ? 0.5 : 0.086, vco:cant ? 1 : 0.6, fy:S.fy, load:LOADS[S.load] }));
+    Array.prototype.forEach.call(document.querySelectorAll('.loadcap'), function(p){
+      p.textContent = LOADS[S.load].cap + ' Live load ' + (LOADS[S.load].ll > 3 ? '50' : '25') + '% sustained.';
+    });
+    drawTwo();
+    drawLoad(Db);
+  }
+
+  function segGroup(id, attr, fn){
+    var btns = document.querySelectorAll('#' + id + ' button');
+    Array.prototype.forEach.call(btns, function(btn){
+      btn.addEventListener('click', function(){
+        Array.prototype.forEach.call(btns, function(o){ o.setAttribute('aria-pressed', String(o === btn)); });
+        fn(btn.getAttribute(attr)); draw();
+      });
+    });
+  }
+  function shared(attr, fn){
+    var btns = document.querySelectorAll('button[' + attr + ']');
+    Array.prototype.forEach.call(btns, function(btn){
+      btn.addEventListener('click', function(){
+        var v = btn.getAttribute(attr);
+        Array.prototype.forEach.call(btns, function(o){ o.setAttribute('aria-pressed', String(o.getAttribute(attr) === v)); });
+        fn(v); draw();
+      });
+    });
+  }
+  ['sBeam','sOne','sLx','sLy','w','b'].forEach(function(id){ $(id).addEventListener('input', draw); });
+  segGroup('supBeam', 'data-sup', function(v){ S.beam.sup = v; });
+  segGroup('supOne', 'data-sup', function(v){ S.oneway.sup = v; });
+  shared('data-fy', function(v){ S.fy = parseInt(v, 10); });
+  shared('data-load', function(v){ S.load = v; });
+  segGroup('fckSeg', 'data-fck', function(v){ S.fck = parseInt(v, 10); });
+  segGroup('memSeg', 'data-mem', function(v){
+    S.mem = v;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-for]'), function(el){
+      el.hidden = el.getAttribute('data-for') !== v;
+    });
+    $('loadBox').hidden = (v !== 'beam');
+  });
+  [['eTop','top'],['eBot','bot'],['eLft','lft'],['eRgt','rgt']].forEach(function(z){
+    $(z[0]).addEventListener('click', function(){ S.edges[z[1]] = !S.edges[z[1]]; draw(); });
+  });
+
+  draw();
+})();
+</script>
+</body>
+</html>
